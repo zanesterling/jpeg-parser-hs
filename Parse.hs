@@ -13,6 +13,7 @@ module Parse ( Parser
              , peelWord32
              , peelWord64
              , assertThat
+             , msnd , mfst
              ) where
 
 import qualified Data.ByteString.Lazy as L
@@ -39,7 +40,9 @@ expecter :: Eq a => Show a
          => Peeler a -> Expecter a
 expecter p a s = do
   (s', a') <- p s
-  if a' == a then Right s' else Left (s, "expected " ++ show a ++ "found " ++ show a)
+  if a' == a
+    then Right s'
+    else Left (s, "expected " ++ show a ++ " found " ++ show a')
 
 parser :: Peeler a -> Parser a
 parser p s = do
@@ -58,7 +61,7 @@ peelAny :: Peeler a -> Peeler [a]
 peelAny p s =
   case p s of
     Left (_, _) -> Right (s, [])
-    Right (s', a) -> (\(s'', as) -> (s'', a:as)) <$> (peelAny p s')
+    Right (s', a) -> msnd (a:) <$> (peelAny p s')
 
 assertThat :: L.ByteString
            -> Bool
@@ -78,8 +81,8 @@ peelNBytes n = peeler ("expected " ++ show n ++ " bytes") $
 expectBytes :: Expecter L.ByteString
 expectBytes bs = expecter (peelNBytes $ fromIntegral $ L.length bs) bs
 
--- mfst :: (a -> a') -> (a, b) -> (a', b)
--- mfst f (a, b) = (f a, b)
+mfst :: (a -> a') -> (a, b) -> (a', b)
+mfst f (a, b) = (f a, b)
 msnd :: (b -> b') -> (a, b) -> (a, b')
 msnd f (a, b) = (a, f b)
 

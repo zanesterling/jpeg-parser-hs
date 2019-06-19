@@ -1,0 +1,20 @@
+* jpeg-parser-hs
+  A JPEG parser in Haskell for kick
+
+** Useful links
+   - [[http://vip.sugovica.hu/Sardi/kepnezo/JPEG%20File%20Layout%20and%20Format.htm][JPEG File Layout and Format]]
+   - [[https://www.impulseadventure.com/photo/jpeg-huffman-coding.html][JPEG Huffman Coding Tutorial]]
+   - [[https://parametric.press/issue-01/unraveling-the-jpeg/][Unraveling the JPEG]]
+   - [[http://pv.bstu.ru/flp/RealWorldHaskell.pdf][Real World Haskell PDF]]
+
+** Open tasks
+   - learn how huffman tables work
+   - decode huffman table
+   - use huffman table to decode image data
+   - compose list of more decompression tasks
+   - display jpeg to screen
+   - corrupt jpeg to change output image. experiment!
+
+** Closed tasks
+   - write the parsed JPEG back out
+   - parse out the outlines of the segments

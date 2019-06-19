@@ -6,6 +6,18 @@ import qualified Data.ByteString as B
 import Data.Word (Word8, Word16, Word32, Word64)
 import Parse
 import Numeric (showHex)
+import Data.Serializer (word16B)
+
+-- tools
+fromLeft (Left x) = x
+fromRight (Right x) = x
+toHex = flip showHex ""
+
+
+class Bytten a where
+  toBytesLazy :: a -> L.ByteString
+  toBytes :: a -> B.ByteString
+  toBytes = L.toStrict . toBytesLazy
 
 
 -- Jpeg
@@ -21,6 +33,19 @@ data Jpeg = Jpeg {
 
 instance Show Jpeg where
   show (Jpeg _ _ _ _ _ _ _) = "Jpeg"
+
+instance Bytten Jpeg where
+  toBytesLazy j = L.concat [ toBytesLazy soiMarker
+                           , toBytesLazy $ jpegApp0 j
+                           , L.concat $ map toBytesLazy $ jpegAppns j
+                           , L.concat $ map toBytesLazy $ jpegDQTable j
+                           , toBytesLazy $ jpegSof j
+                           , L.concat $ map toBytesLazy $ jpegDHTable j
+                           , toBytesLazy $ jpegSos j
+                           , L.concatMap expandFf $ L.fromStrict $ jpegBytes j
+                           , toBytesLazy eoiMarker
+                           ]
+    where expandFf x = L.pack $ if x == 0xff then [0xff, 0] else [x]
 
 parseJpeg :: Parser Jpeg
 parseJpeg = parser peelJpeg
@@ -64,6 +89,12 @@ data AppnSegment = AppnSegment {
   , appnBytes :: B.ByteString
   } deriving (Eq)
 
+instance Bytten AppnSegment where
+  toBytesLazy seg = L.concat [ toBytesLazy $ appnMarker $ appnN seg
+                             , L.pack $ word16B $ fromIntegral $ 2 + B.length (appnBytes seg)
+                             , L.fromStrict $ appnBytes seg
+                             ]
+
 peelAppnSegment :: Peeler AppnSegment
 peelAppnSegment s = do
   (s', m) <- peelMarker s
@@ -90,6 +121,9 @@ densityUnitsFromInt 0 = Just NoUnits
 densityUnitsFromInt 1 = Just DotsPerInch
 densityUnitsFromInt 2 = Just DotsPerCm
 densityUnitsFromInt _ = Nothing
+toNum NoUnits     = 0
+toNum DotsPerInch = 1
+toNum DotsPerCm   = 2
 
 instance Show App0Segment where
   show seg = "App0Segment"
@@ -97,6 +131,20 @@ instance Show App0Segment where
           ++ " " ++ show (app0DensityUnits seg)
           ++ " Density:" ++ show (app0XDensity seg) ++ ":" ++ show (app0YDensity seg)
           ++ " Thumb:" ++ show (app0ThumbWidth seg) ++ "x" ++ show (app0ThumbHeight seg)
+
+instance Bytten App0Segment where
+  toBytesLazy seg = L.concat [ toBytesLazy app0Marker
+                             , L.pack $ word16B $ fromIntegral $ 16 + B.length (app0ThumbBytes seg)
+                             , L8.pack "JFIF\0"
+                             , L.singleton $ app0Major seg
+                             , L.singleton $ app0Minor seg
+                             , L.singleton $ toNum $ app0DensityUnits seg
+                             , L.pack $ word16B $ fromIntegral $ app0XDensity seg
+                             , L.pack $ word16B $ fromIntegral $ app0YDensity seg
+                             , L.singleton $ fromIntegral $ app0ThumbWidth seg
+                             , L.singleton $ fromIntegral $ app0ThumbHeight seg
+                             , L.fromStrict $ app0ThumbBytes seg
+                             ]
 
 peelApp0Segment :: Peeler App0Segment
 peelApp0Segment s = do
@@ -127,6 +175,12 @@ data DQTable = DQTable {
     dqtBytes :: B.ByteString
   } deriving (Eq)
 
+instance Bytten DQTable where
+  toBytesLazy x = L.concat [ toBytesLazy dqtMarker
+                           , L.pack $ word16B $ fromIntegral $ 2 + B.length (dqtBytes x)
+                           , L.fromStrict $ dqtBytes x
+                           ]
+
 peelDqt :: Peeler DQTable
 peelDqt s = do
   (s', bs) <- peelSegment dqtMarker s
@@ -138,6 +192,12 @@ peelDqt s = do
 data SOFSegment = SOFSegment {
     sofBytes :: B.ByteString
   } deriving (Eq)
+
+instance Bytten SOFSegment where
+  toBytesLazy x = L.concat [ toBytesLazy sofMarker
+                           , L.pack $ word16B $ fromIntegral $ 2 + B.length (sofBytes x)
+                           , L.fromStrict $ sofBytes x
+                           ]
 
 peelSof :: Peeler SOFSegment
 peelSof s = do
@@ -151,6 +211,12 @@ data DHTable = DHTable {
     dhtBytes :: B.ByteString
   } deriving (Eq)
 
+instance Bytten DHTable where
+  toBytesLazy x = L.concat [ toBytesLazy dhtMarker
+                           , L.pack $ word16B $ fromIntegral $ 2 + B.length (dhtBytes x)
+                           , L.fromStrict $ dhtBytes x
+                           ]
+
 peelDht :: Peeler DHTable
 peelDht s = do
   (s', bs) <- peelSegment dhtMarker s
@@ -162,6 +228,12 @@ peelDht s = do
 data SOSSegment = SOSSegment {
     sosBytes :: B.ByteString
   } deriving (Eq)
+
+instance Bytten SOSSegment where
+  toBytesLazy x = L.concat [ toBytesLazy sosMarker
+                           , L.pack $ word16B $ fromIntegral $ 2 + B.length (sosBytes x)
+                           , L.fromStrict $ sosBytes x
+                           ]
 
 peelSos :: Peeler SOSSegment
 peelSos s = do
@@ -185,12 +257,14 @@ data Marker = Marker { markerByte :: Word8 }
   deriving (Eq, Read)
 instance Show Marker where
   show (Marker b) = "Marker 0x" ++ showHex b ""
+instance Bytten Marker where
+  toBytesLazy m = L.pack [0xff, markerByte m]
 
 isMarker :: L.ByteString -> Bool
 isMarker s = L.length s == 2 && L.head s == 0xff
 
 soiMarker    = Marker 0xd8
-appnMarker n = Marker $ 0xe0 + n
+appnMarker n = Marker $ 0xe0 + fromIntegral n
 app0Marker   = appnMarker 0
 dqtMarker    = Marker 0xdb
 sofMarker    = Marker $ 0xc0

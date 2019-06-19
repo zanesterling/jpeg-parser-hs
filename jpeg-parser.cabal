@@ -54,13 +54,13 @@ executable jpeg-parser
   main-is:             Main.hs
   
   -- Modules included in this executable, other than Main.
-  -- other-modules:       
+  other-modules:       Jpeg, Parse
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:    
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.10 && <4.11, bytestring >=0.10 && <0.11
+  build-depends:       base >=4.10 && <4.11, bytestring >=0.10 && <0.11, data-serializer
   
   -- Directories containing source files.
   -- hs-source-dirs:      
